@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CodeStream Live</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+
+    <style>
+        body { 
+            font-family: -apple-system, system-ui, sans-serif; 
+            background: #000000; color: #e1e1e1; margin: 0; padding-top: 70px; 
+        }
+        header {
+            position: fixed; top: 0; width: 100%; background: #1e1e1e;
+            padding: 15px 0; border-bottom: 1px solid #333; text-align: center;
+            font-weight: bold; color: #007acc; z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        .file-card { 
+            background: #121212; margin: 15px; border-radius: 12px; 
+            border: 1px solid #2d2d2d; overflow: hidden; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .file-info { 
+            background: #252526; padding: 10px 15px; font-size: 0.9em; 
+            color: #4fc1ff; border-bottom: 1px solid #2d2d2d;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .copy-btn {
+            background: transparent; border: none; cursor: pointer;
+            padding: 5px; border-radius: 6px; display: flex; align-items: center;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .copy-btn:hover { background: rgba(255, 255, 255, 0.1); }
+        .copy-btn:active { transform: scale(0.9); }
+        .copy-btn svg { fill: #888; width: 20px; height: 20px; }
+        .copy-btn.success svg { fill: #4caf50; }
+
+        pre { 
+            margin: 0 !important; border-radius: 0 !important;
+            padding: 15px !important; overflow-x: auto; 
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace; 
+            font-size: 13px; line-height: 1.5;
+        }
+        .status { 
+            padding: 8px 15px; font-size: 0.75em; color: #666; 
+            text-align: right; background: #121212; border-top: 1px solid #222;
+        }
+        /* Error/Empty State Styling */
+        .error-msg { text-align: center; padding: 40px; color: #888; }
+        .error-msg h2 { color: #007acc; margin-bottom: 10px; font-size: 1.4em; }
+        .error-msg p { margin: 5px 0; line-height: 1.4; color: #bbb; font-size: 0.95em; }
+    </style>
+</head>
+<body>
+    <header>CodeStream Live</header>
+
+    <div id="file-list">
+        <div class="error-msg">Connecting to Firebase...</div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAHafD6NEnKE1L5sK27U5q31QJ6SVUy4jQ",
+            authDomain: "codestream-4ca2f.firebaseapp.com",
+            projectId: "codestream-4ca2f",
+            storageBucket: "codestream-4ca2f.firebasestorage.app",
+            messagingSenderId: "256627222304",
+            appId: "1:256627222304:web:4ff01cf737d675eaded945"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const myUserId = urlParams.get('user') || 'dev_user_1';
+        const fileListDiv = document.getElementById('file-list');
+
+        onSnapshot(collection(db, "users", myUserId, "files"), (snapshot) => {
+            if (snapshot.empty) {
+                fileListDiv.innerHTML = `
+                    <div class="error-msg">
+                        <h2>No files found for: ${myUserId}</h2>
+                        <p>1. In VS Code, run <b>Set My Sync ID</b></p>
+                        <p>2. Enter: <b>${myUserId}</b></p>
+                        <p>3. Save any file to start syncing.</p>
+                        <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
+                        <p style="font-size: 0.85em; color: #4fc1ff; word-break: break-all;">
+                           <b>Target URL:</b><br>${window.location.origin}${window.location.pathname}?user=${myUserId}
+                        </p>
+                    </div>`;
+                return;
+            }
+
+            fileListDiv.innerHTML = ""; 
+
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                const timeString = data.timestamp?.toDate().toLocaleTimeString() || "Just now";
+                const docId = doc.id.replace(/[^a-zA-Z0-9]/g, '_');
+
+                const card = document.createElement('div');
+                card.className = 'file-card';
+                
+                card.innerHTML = `
+                    <div class="file-info">
+                        <span>📄 ${data.name}</span>
+                        <button class="copy-btn" id="btn-${docId}" title="Copy Code">
+                            <svg viewBox="0 -960 960 960"><path d="M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0-33-23.5-56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-560h80v560h440v80H200Zm160-240v-480 480Z"/></svg>
+                        </button>
+                    </div>
+                    <pre><code class="language-typescript" id="code-${docId}">${escapeHtml(data.content)}</code></pre>
+                    <div class="status">User: ${myUserId} | Last Synced: ${timeString}</div>
+                `;
+                
+                fileListDiv.appendChild(card);
+
+                // Add click event for the copy button
+                document.getElementById(`btn-${docId}`).addEventListener('click', () => {
+                    handleCopy(data.content, `btn-${docId}`);
+                });
+            });
+
+            // Re-run Prism highlight
+            setTimeout(() => {
+                Prism.highlightAll();
+            }, 10);
+        });
+
+        // Copy Function
+        async function handleCopy(text, btnId) {
+            const btn = document.getElementById(btnId);
+            try {
+                await navigator.clipboard.writeText(text);
+                btn.classList.add('success');
+                setTimeout(() => btn.classList.remove('success'), 2000);
+            } catch (err) {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textArea);
+                btn.classList.add('success');
+                setTimeout(() => btn.classList.remove('success'), 2000);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
